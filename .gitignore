@@ -1,1 +1,11 @@
-.\wxfitdiet\desktop\node_modules
+# Root-level ignores
+/node_modules/
+/build/
+/dist/
+/*.log
+
+# Project specific
+/wxfitdiet/desktop/node_modules/
+/wxfitdiet/desktop/dist/
+/wxfitdiet/miniprogram/dist/
+**/*.log

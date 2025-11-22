@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>健身饮食管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="nav">
+    <button data-tab="login">登录</button>
+    <button data-tab="profile">个人信息</button>
+    <button data-tab="diet">饮食记录</button>
+    <button data-tab="analysis">分析</button>
+    <button data-tab="recommend">推荐</button>
+    <button data-tab="share">分享</button>
+    <button data-tab="export">导出</button>
+  </div>
+  <div id="login" class="tab">
+    <div class="section"><div class="title">微信授权登录</div><button id="btnLogin">授权登录</button></div>
+  </div>
+  <div id="profile" class="tab hidden">
+    <div class="section">
+      <div class="title"><span class="icon" aria-hidden="true">🔧</span>基本信息</div>
+      <label>年龄<span class="req">*</span></label>
+      <input id="ageNum" type="number" min="18" max="99" placeholder="年龄(18-99)">
+      <label>性别<span class="req">*</span></label>
+      <div class="radio-group">
+        <label><input type="radio" name="gender" value="male" checked>男</label>
+        <label><input type="radio" name="gender" value="female">女</label>
+        <label><input type="radio" name="gender" value="other">其他</label>
+      </div>
+      <label>身高(cm)<span class="req">*</span></label>
+      <input id="height" type="number" placeholder="身高(cm)">
+      <label>体重(kg)<span class="req">*</span></label>
+      <input id="weight" type="number" placeholder="体重(kg)">
+      <label>健康目标<span class="req">*</span></label>
+      <select id="goalSelect">
+        <option value="">请选择</option>
+        <option value="fat_loss">减脂</option>
+        <option value="muscle_gain">增肌</option>
+        <option value="maintain">维持</option>
+        <option value="special">特殊需求</option>
+      </select>
+      <label>饮食记录(选填)</label>
+      <textarea id="dietNotes" rows="4" placeholder="记录每日饮食，用于后续RAG检索"></textarea>
+      <div id="errorMsg" class="error"></div>
+    </div>
+    <button id="btnSave" class="btn-primary">保存并计算</button>
+  </div>
+  <div id="diet" class="tab hidden">
+    <div class="section">
+      <div class="title"><span class="icon">🍽️</span>随手记录</div>
+      <label>上传照片</label>
+      <input id="photo" type="file" accept="image/*">
+      <label>食物描述</label>
+      <textarea id="foodText" rows="3" placeholder="输入或使用语音转文字"></textarea>
+      <button id="btnVoice" class="btn-secondary">语音输入</button>
+      <label>卡路里</label>
+      <div class="row">
+        <input id="caloriesAuto" placeholder="自动估算" disabled>
+        <input id="caloriesManual" placeholder="手动输入">
+      </div>
+      <label>记录时间</label>
+      <input id="timePicker" type="datetime-local">
+      <div id="dietError" class="error"></div>
+    </div>
+    <div class="bottom-bar">
+      <button id="btnSaveDiet" class="btn-primary">保存记录</button>
+    </div>
+    <div id="toast" class="toast">记录已保存</div>
+    <div class="section"><div class="title"><span class="icon">🗂️</span>历史记录</div>
+      <div id="dietList"></div>
+    </div>
+  </div>
+  <div id="analysis" class="tab hidden">
+    <div class="section"><div class="title">总热量</div><div id="total"></div></div>
+    <div class="section"><div class="title">三大营养素占比</div><div id="ratio"></div></div>
+  </div>
+  <div id="recommend" class="tab hidden">
+    <div class="section"><div class="title">推荐方案数量</div>
+      <select id="count"><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select>
+    </div>
+    <div class="section"><button id="btnGen" class="btn-primary">生成方案</button></div>
+    <div class="section" id="plans"></div>
+  </div>
+  <div id="share" class="tab hidden">
+    <div class="section"><div class="title">生成计划二维码</div><button id="btnQR" class="btn-primary">生成二维码</button><img id="qr"/></div>
+  </div>
+  <div id="export" class="tab hidden">
+    <div class="section"><div class="title">导出营养报告</div><button id="btnXLS" class="btn-primary">导出Excel</button><button id="btnPDF" class="btn-primary">导出PDF</button></div>
+  </div>
+  <script type="module" src="renderer.js"></script>
+</body>
+</html>
