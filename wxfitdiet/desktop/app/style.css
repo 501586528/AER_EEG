@@ -26,3 +26,5 @@ img { width: 200px; height: 200px; border-radius: 8px; }
 .bars { margin-top: 12px; }
 .bar { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
 .bar-inner { height: 12px; background: var(--primary); border-radius: 8px; width: 0; transition: width 0.4s ease; flex: 1; position: relative; }
+.analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+ul { list-style: disc; padding-left: 20px; }

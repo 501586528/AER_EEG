@@ -4,8 +4,9 @@ const crypto = require('crypto')
 const { loadConfig, setApiUrl, setApiKey, setConfigPath, startWatch } = require('./src/config')
 const { parseDietText } = require('./src/parser')
 const { queryFood } = require('./src/fooddb')
-const { saveRecord, listRecords, saveProfile, getProfile, saveAnalysisCache, getAnalysisCache } = require('./src/storage')
+const { saveRecord, listRecords, saveProfile, getProfile, saveAnalysisCache, getAnalysisCache, savePreferences, getPreferences } = require('./src/storage')
 const { buildAnalysisTemplate, generateAnalysis, buildRecommend, scoreAndSort, visualizePlans } = require('./src/analysis')
+const { scoreVector, weightScore } = require('./src/preferences')
 const { logInfo, logError } = require('./src/logger')
 
 const RATE = {}
@@ -114,9 +115,28 @@ const server = http.createServer(async (req, res) => {
       const analysisKey = body.analysisKey || hash(buildAnalysisTemplate(records))
       const analysis = await getAnalysisCache(analysisKey)
       const plans = buildRecommend({ records, analysis, profile })
-      const scored = scoreAndSort(plans)
+      const prefs = (await getPreferences()) || { vector: { ingredients: {}, methods: {}, cuisines: {} } }
+      const weights = body.weights || { ingredients: 0.5, methods: 0.2, cuisines: 0.3 }
+      const scored = scoreAndSort(plans.map(p => ({ ...p, score: (p.score || 50) + weightScore(prefs.vector, weights) })))
       const viz = visualizePlans(scored)
       return writeJson(res, 200, { plans: scored, viz })
+    }
+    if (req.method === 'POST' && parsed.pathname === '/preferences/analyze') {
+      const body = await readBody(req, res)
+      const records = body.records || await listRecords()
+      const t0 = Date.now()
+      const prefs = scoreVector(records)
+      await savePreferences(prefs)
+      const dt = Date.now() - t0
+      return writeJson(res, 200, { prefs, elapsed_ms: dt })
+    }
+    if (req.method === 'GET' && parsed.pathname === '/preferences/current') {
+      const prefs = await getPreferences()
+      return writeJson(res, prefs ? 200 : 404, prefs ? { prefs } : { error: 'not_found' })
+    }
+    if (req.method === 'GET' && parsed.pathname === '/preferences/debug') {
+      const prefs = await getPreferences()
+      return writeJson(res, 200, { prefs: prefs || { vector: { ingredients: {}, methods: {}, cuisines: {} }, totalCal: 0 } })
     }
     writeJson(res, 404, { error: 'not_found' })
   } catch (e) {

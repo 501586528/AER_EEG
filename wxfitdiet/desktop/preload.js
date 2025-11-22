@@ -10,4 +10,8 @@ contextBridge.exposeInMainWorld('api', {
   storageSet: (key, value) => ipcRenderer.invoke('storage:set', key, value),
   fileStore: (path) => ipcRenderer.invoke('file:store', { path })
   ,exportAnalysisPdf: () => ipcRenderer.invoke('pdf:export')
+  ,llmAnalyze: (prompt) => ipcRenderer.invoke('llm:analyze', { prompt })
+  ,analysisSave: (payload) => ipcRenderer.invoke('analysis:save', payload)
+  ,llmPlan: (prompt) => ipcRenderer.invoke('llm:plan', { prompt })
+  ,planSave: (payload) => ipcRenderer.invoke('plan:save', payload)
 })

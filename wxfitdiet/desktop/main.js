@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage } = require('electron')
 const path = require('path')
 const fs = require('fs')
 let win
@@ -23,14 +23,37 @@ function writeJson(name, data) {
 }
 app.whenReady().then(() => {
   createWindow()
-  tray = new Tray(process.platform === 'win32' ? path.join(__dirname, 'app/icon.ico') : path.join(__dirname, 'app/icon.png'))
-  const menu = Menu.buildFromTemplate([
-    { label: '显示', click: () => win.show() },
-    { label: '隐藏', click: () => win.hide() },
-    { label: '退出', click: () => app.quit() }
-  ])
-  tray.setToolTip('WxFitDiet')
-  tray.setContextMenu(menu)
+  try {
+    const iconPath = process.platform === 'win32'
+      ? path.join(__dirname, 'app', 'icon.ico')
+      : path.join(__dirname, 'app', 'icon.png')
+    const icon = fs.existsSync(iconPath) ? iconPath : nativeImage.createEmpty()
+    tray = new Tray(icon)
+    const menu = Menu.buildFromTemplate([
+      { label: '显示', click: () => win.show() },
+      { label: '隐藏', click: () => win.hide() },
+      { label: '退出', click: () => app.quit() }
+    ])
+    tray.setToolTip('WxFitDiet')
+    tray.setContextMenu(menu)
+  } catch (e) {
+    tray = null
+  }
+  ;(async () => {
+    const cfg = loadLlmConfig()
+    if (!cfg.api_key) { console.error('LLM FAIL no_api_key'); return }
+    try {
+      const base = new URL(cfg.base_url)
+      const pathName = base.pathname.replace(/\/$/, '') + '/chat/completions'
+      const urlObj = new URL(base.origin + pathName)
+      const payload = { model: 'deepseek-chat', messages: [{ role: 'user', content: 'ping' }] }
+      const r = await reqJson(urlObj, payload, { Authorization: `Bearer ${cfg.api_key}` }, cfg.timeout_ms)
+      if (r.status === 200) console.log('LLM OK', r.status)
+      else console.error('LLM FAIL', r.status)
+    } catch (e) {
+      console.error('LLM FAIL', e && e.message ? e.message : 'error')
+    }
+  })()
 })
 ipcMain.handle('auth', async () => {
   return { user: { id: Date.now(), role: 'user' } }
@@ -72,6 +95,94 @@ ipcMain.handle('pdf:export', async () => {
   shell.showItemInFolder(file)
   return { url: file }
 })
+function readYaml(p) {
+  if (!fs.existsSync(p)) return null
+  const raw = fs.readFileSync(p, 'utf-8')
+  const out = {}
+  raw.split(/\r?\n/).forEach(line => {
+    const s = line.trim()
+    if (!s || s.startsWith('#')) return
+    const i = s.indexOf(':')
+    if (i <= 0) return
+    const k = s.slice(0, i).trim()
+    let v = s.slice(i + 1).trim()
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith('\'') && v.endsWith('\''))) v = v.slice(1, -1)
+    out[k] = v.replace(/\$\{([A-Z0-9_]+)\}/g, (_, n) => process.env[n] || '')
+  })
+  return out
+}
+function loadLlmConfig() {
+  const p = path.resolve(__dirname, '../server/data/config.yaml')
+  const y = readYaml(p) || {}
+  const base_url = y.base_url || process.env.LLM_API_URL || 'https://api.deepseek.com/v1'
+  const api_key = y.api_key || process.env.LLM_API_KEY || ''
+  const timeout_ms = Number(y.timeout_ms || process.env.LLM_TIMEOUT_MS || 30000)
+  return { base_url, api_key, timeout_ms }
+}
+function ensureDir(...parts) {
+  const dir = path.join(...parts)
+  fs.mkdirSync(dir, { recursive: true })
+  return dir
+}
+function writeJsonFile(dir, base, obj) {
+  const ts = new Date()
+  const pad = n => n.toString().padStart(2, '0')
+  const stamp = `${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}`
+  const idxPath = path.join(dir, `${base}-index.json`)
+  let v = 1
+  if (fs.existsSync(idxPath)) { try { const idx = JSON.parse(fs.readFileSync(idxPath, 'utf-8')); v = Number(idx.version || 0) + 1 } catch {} }
+  fs.writeFileSync(idxPath, JSON.stringify({ version: v, ts: Date.now() }))
+  const file = path.join(dir, `${base}-${stamp}-v${v}.json`)
+  fs.writeFileSync(file, JSON.stringify({ version: v, timestamp: stamp, data: obj }, null, 2))
+  return file
+}
+function toCsv(obj) {
+  const rows = []
+  function push(k, v) { rows.push(`${JSON.stringify(k)},${JSON.stringify(v)}`) }
+  if (obj.summary) push('summary', obj.summary)
+  if (obj.nutrients) Object.keys(obj.nutrients).forEach(k => push(`nutrients.${k}`, obj.nutrients[k]))
+  if (Array.isArray(obj.evaluation)) obj.evaluation.forEach((x, i) => push(`evaluation[${i}]`, x))
+  if (Array.isArray(obj.recommendations)) obj.recommendations.forEach((x, i) => push(`recommendations[${i}]`, x))
+  return rows.join('\n')
+}
+function reqJson(urlObj, body, headers, timeout) {
+  return new Promise((resolve, reject) => {
+    const lib = urlObj.protocol === 'https:' ? require('https') : require('http')
+    const req = lib.request({
+      protocol: urlObj.protocol,
+      hostname: urlObj.hostname,
+      port: urlObj.port,
+      path: urlObj.pathname + urlObj.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }
+    }, res => {
+      let buf = ''
+      res.on('data', d => { buf += d })
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, json: buf ? JSON.parse(buf) : {} }) } catch { resolve({ status: res.statusCode, text: buf }) }
+      })
+    })
+    req.on('error', reject)
+    req.setTimeout(timeout, () => { req.destroy(new Error('timeout')) })
+    req.write(JSON.stringify(body || {}))
+    req.end()
+  })
+}
+ipcMain.handle('llm:analyze', async (e, args) => {
+  const cfg = loadLlmConfig()
+  if (!cfg.api_key) return { error: 'no_api_key' }
+  const base = new URL(cfg.base_url)
+  const pathName = base.pathname.replace(/\/$/, '') + '/chat/completions'
+  const urlObj = new URL(base.origin + pathName)
+  const payload = { model: 'deepseek-chat', messages: [{ role: 'user', content: args && args.prompt ? args.prompt : '请分析' }] }
+  const r = await reqJson(urlObj, payload, { Authorization: `Bearer ${cfg.api_key}` }, cfg.timeout_ms)
+  if (r.status !== 200) return { error: 'request_failed', status: r.status, body: r.json || r.text }
+  const choices = r.json && r.json.choices ? r.json.choices : []
+  const content = choices[0] && choices[0].message && choices[0].message.content ? choices[0].message.content : ''
+  let result = null
+  try { result = JSON.parse(content) } catch { result = { summary: content } }
+  return { result }
+})
 ipcMain.handle('file:store', async (e, args) => {
   const src = args && args.path
   if (!src) return { error: 'no_path' }
@@ -98,4 +209,50 @@ ipcMain.handle('storage:set', async (e, key, value) => {
 })
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+ipcMain.handle('analysis:save', async (e, payload) => {
+  const dir = ensureDir(app.getPath('userData'), 'analysis')
+  const file = writeJsonFile(dir, 'analysis', payload)
+  const csv = toCsv(payload.result || payload)
+  fs.writeFileSync(file.replace(/\.json$/, '.csv'), csv)
+  return { file }
+})
+function getStorageItem(key) {
+  const data = readJson('storage.json')
+  const found = data.find(x => x.key === key)
+  return found ? found.value : null
+}
+function validatePlanAgainstProfile(plan, profile) {
+  const allergies = (profile && profile.allergies) ? [].concat(profile.allergies) : []
+  let avoided = true
+  const week = (plan && plan.week) || []
+  week.forEach(d => {
+    ['breakfast', 'lunch', 'dinner'].forEach(m => {
+      const ing = (((d || {}).meals || {})[m] || {}).ingredients || []
+      ing.forEach(item => { allergies.forEach(a => { if (String(item).includes(a)) avoided = false }) })
+    })
+  })
+  return { avoidedAllergens: avoided }
+}
+ipcMain.handle('llm:plan', async (e, args) => {
+  const cfg = loadLlmConfig()
+  if (!cfg.api_key) return { error: 'no_api_key' }
+  const base = new URL(cfg.base_url)
+  const pathName = base.pathname.replace(/\/$/, '') + '/chat/completions'
+  const urlObj = new URL(base.origin + pathName)
+  const payload = { model: 'deepseek-chat', messages: [{ role: 'user', content: args && args.prompt ? args.prompt : '生成周计划' }] }
+  const r = await reqJson(urlObj, payload, { Authorization: `Bearer ${cfg.api_key}` }, cfg.timeout_ms)
+  if (r.status !== 200) return { error: 'request_failed', status: r.status, body: r.json || r.text }
+  const choices = r.json && r.json.choices ? r.json.choices : []
+  const content = choices[0] && choices[0].message && choices[0].message.content ? choices[0].message.content : ''
+  let plan = null
+  try { plan = JSON.parse(content) } catch { plan = { summary: content } }
+  const profile = getStorageItem('user_profile') || {}
+  const validation = validatePlanAgainstProfile(plan, profile)
+  return { plan, validation }
+})
+ipcMain.handle('plan:save', async (e, payload) => {
+  const dir = ensureDir(app.getPath('userData'), 'plans')
+  const file = writeJsonFile(dir, 'plan', payload)
+  return { file }
 })

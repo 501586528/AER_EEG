@@ -2,6 +2,7 @@ import { calculateTarget } from './utils/nutrition.js'
 import { validateProfile, mapGoalToArray } from './utils/validators.js'
 import { asyncSet, asyncGet, pushDoc, startCleanup, addDietRecord, getDietRecords, updateDietRecord } from './utils/storage.js'
 import { buildAnalysisPrompt } from './utils/prompt.js'
+import { analyzePreferences } from './utils/preferences.js'
 const tabs = document.querySelectorAll('.nav button')
 const sections = document.querySelectorAll('.tab')
 tabs.forEach(b => b.addEventListener('click', () => {
@@ -98,8 +99,13 @@ const photo = document.getElementById('photo')
 photo.addEventListener('change', async () => {
   const f = photo.files && photo.files[0]
   if (!f) return
+  const t = document.getElementById('toast')
+  t.textContent = '图片保存中...'
+  t.style.opacity = '1'
   const stored = await window.api.fileStore(f.path || '')
   photo.dataset.storedPath = stored && stored.storedPath ? stored.storedPath : ''
+  t.textContent = '图片已保存'
+  setTimeout(() => { t.style.opacity = '0' }, 2000)
 })
 document.getElementById('btnVoice').addEventListener('click', async () => {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -147,24 +153,54 @@ document.getElementById('btnSaveDiet').addEventListener('click', async () => {
 renderDietList()
 async function runAnalysis() {
   const records = await getDietRecords()
-  const prompt = buildAnalysisPrompt(records)
-  try {
-    const r = await fetch('http://localhost:8787/analysis/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })
-    const data = await r.json()
-    const res = data.result || {}
-    document.getElementById('analysisText').textContent = res.summary || ''
-    const carb = parseInt((res.nutrients && res.nutrients.carbohydrate || '0').toString().replace('%',''))
-    const protein = parseInt((res.nutrients && res.nutrients.protein || '0').toString().replace('%',''))
-    const fat = parseInt((res.nutrients && res.nutrients.fat || '0').toString().replace('%',''))
-    document.getElementById('barCarb').style.width = `${carb}%`
-    document.getElementById('barProtein').style.width = `${protein}%`
-    document.getElementById('barFat').style.width = `${fat}%`
-  } catch (e) {
-    document.getElementById('analysisText').textContent = '分析失败'
-  }
+  const profile = await asyncGet('user_profile')
+  const prompt = buildAnalysisPrompt({ records, profile, timeframe: '最近7天' })
+  const r = await window.api.llmAnalyze(prompt)
+  const res = r && r.result ? r.result : {}
+  document.getElementById('analysisText').textContent = res.summary || ''
+  function pct(v) { if (v == null) return 0; const s = v.toString(); if (s.endsWith('%')) return parseInt(s.replace('%','')); const n = Number(s); return isNaN(n)?0:n }
+  const carb = pct(res.nutrients && res.nutrients.carbohydrate)
+  const protein = pct(res.nutrients && res.nutrients.protein)
+  const fat = pct(res.nutrients && res.nutrients.fat)
+  document.getElementById('barCarb').style.width = `${carb}%`
+  document.getElementById('barProtein').style.width = `${protein}%`
+  document.getElementById('barFat').style.width = `${fat}%`
+  const evalList = Array.isArray(res.evaluation) ? res.evaluation : []
+  const recList = Array.isArray(res.recommendations) ? res.recommendations : []
+  const pref = await analyzePreferences(records)
+  const evalEl = document.getElementById('evaluation')
+  const recEl = document.getElementById('recommendations')
+  evalEl.innerHTML = ''
+  recEl.innerHTML = ''
+  ;(evalList.length ? evalList : [`偏好评分：碳水${pref.scores.carb}%，蛋白质${pref.scores.protein}%，脂肪${pref.scores.fat}%`] ).forEach(t => {
+    const li = document.createElement('li'); li.textContent = t; evalEl.appendChild(li)
+  })
+  ;(recList.length ? recList : pref.recommendations).forEach(t => {
+    const li = document.createElement('li'); li.textContent = t; recEl.appendChild(li)
+  })
+  await window.api.analysisSave({ result: res, preferences: pref, profile })
+  const { buildPlanPrompt } = await import('./utils/prompt.js')
+  const constraints = { goals: (profile && profile.goal) || '', preferences: (profile && profile.dietPrefs) || '', culture: (profile && profile.culture) || '' }
+  const planPrompt = buildPlanPrompt({ profile, analysis: res, constraints })
+  const planOut = await window.api.llmPlan(planPrompt)
+  await window.api.planSave({ plan: planOut.plan, validation: planOut.validation, profile, analysis: res })
 }
-document.getElementById('btnAnalyze').addEventListener('click', runAnalysis)
-document.getElementById('btnExportAnalysis').addEventListener('click', async () => { await window.api.exportAnalysisPdf() })
+document.getElementById('btnAnalyze').addEventListener('click', async () => {
+  const t = document.getElementById('toast')
+  t.textContent = '正在与大模型交互...'
+  t.style.opacity = '1'
+  await runAnalysis().catch(() => {})
+  t.textContent = '分析完成'
+  setTimeout(() => { t.style.opacity = '0' }, 2000)
+})
+document.getElementById('btnExportAnalysis').addEventListener('click', async () => {
+  const t = document.getElementById('toast')
+  t.textContent = '正在导出分析...'
+  t.style.opacity = '1'
+  const r = await window.api.exportAnalysisPdf().catch(() => null)
+  t.textContent = r ? '导出完成' : '导出失败'
+  setTimeout(() => { t.style.opacity = '0' }, 2000)
+})
 async function loadAnalysis() {
   const t = await window.api.storageGet('nutrition_target')
   document.getElementById('total').textContent = `${(t && t.totalCalories) || 0} 千卡`
@@ -173,23 +209,74 @@ async function loadAnalysis() {
 }
 document.querySelector('[data-tab="analysis"]').addEventListener('click', loadAnalysis)
 document.getElementById('btnGen').addEventListener('click', async () => {
+  const t = document.getElementById('toast')
+  t.textContent = '正在生成方案...'
+  t.style.opacity = '1'
   const n = Number(document.getElementById('count').value)
-  const r = await window.api.recommend({ n })
+  const r = await window.api.recommend({ n }).catch(() => ({ plans: [] }))
   const el = document.getElementById('plans')
   el.innerHTML = ''
-  r.plans.forEach(p => {
+  (r.plans || []).forEach(p => {
     const div = document.createElement('div')
     div.textContent = `${p.title} 难度${p.level} 预估效果${p.effect}`
     el.appendChild(div)
   })
+  t.textContent = (r.plans && r.plans.length) ? '生成完成' : '生成失败'
+  setTimeout(() => { t.style.opacity = '0' }, 2000)
 })
 document.getElementById('btnQR').addEventListener('click', async () => {
-  const r = await window.api.share({ ttlDays: 7 })
-  document.getElementById('qr').src = r.url || ''
+  const t = document.getElementById('toast')
+  t.textContent = '正在生成二维码...'
+  t.style.opacity = '1'
+  const r = await window.api.share({ ttlDays: 7 }).catch(() => ({}))
+  document.getElementById('qr').src = (r && r.url) || ''
+  t.textContent = (r && r.url) ? '二维码已生成' : '生成失败'
+  setTimeout(() => { t.style.opacity = '0' }, 2000)
 })
 document.getElementById('btnXLS').addEventListener('click', async () => {
-  await window.api.export({ type: 'excel' })
+  const t = document.getElementById('toast')
+  t.textContent = '正在导出Excel...'
+  t.style.opacity = '1'
+  const r = await window.api.export({ type: 'excel' }).catch(() => null)
+  t.textContent = r ? '导出完成' : '导出失败'
+  setTimeout(() => { t.style.opacity = '0' }, 2000)
 })
 document.getElementById('btnPDF').addEventListener('click', async () => {
-  await window.api.export({ type: 'pdf' })
+  const t = document.getElementById('toast')
+  t.textContent = '正在导出PDF...'
+  t.style.opacity = '1'
+  const r = await window.api.export({ type: 'pdf' }).catch(() => null)
+  t.textContent = r ? '导出完成' : '导出失败'
+  setTimeout(() => { t.style.opacity = '0' }, 2000)
+})
+document.getElementById('btnPrefAnalyze').addEventListener('click', async () => {
+  const t = document.getElementById('toast')
+  t.textContent = '偏好分析中...'
+  t.style.opacity = '1'
+  const r = await fetch('http://localhost:8787/preferences/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }).then(x => x.json()).catch(() => ({}))
+  const prefs = (r && r.prefs) || { vector: { ingredients: {}, methods: {}, cuisines: {} } }
+  const el = document.getElementById('prefBars')
+  el.innerHTML = ''
+  function add(title, obj) {
+    const section = document.createElement('div')
+    section.innerHTML = `<div class='title'>${title}</div>`
+    Object.keys(obj).forEach(k => {
+      const row = document.createElement('div')
+      row.className = 'bar'
+      const name = document.createElement('span')
+      name.textContent = k
+      const inner = document.createElement('div')
+      inner.className = 'bar-inner'
+      inner.style.width = `${obj[k]}%`
+      row.appendChild(name)
+      row.appendChild(inner)
+      section.appendChild(row)
+    })
+    el.appendChild(section)
+  }
+  add('食材偏好', prefs.vector.ingredients)
+  add('烹饪方式偏好', prefs.vector.methods)
+  add('菜系偏好', prefs.vector.cuisines)
+  t.textContent = '分析完成'
+  setTimeout(() => { t.style.opacity = '0' }, 2000)
 })

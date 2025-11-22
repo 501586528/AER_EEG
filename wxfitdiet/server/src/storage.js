@@ -5,6 +5,7 @@ const base = path.join(__dirname, '../data')
 const dietFile = path.join(base, 'diet_records.json')
 const profileFile = path.join(base, 'profile.json')
 const cacheDir = path.join(base, 'analysis_cache')
+const prefFile = path.join(base, 'preferences.json')
 
 function ensure() { fs.mkdirSync(base, { recursive: true }); fs.mkdirSync(cacheDir, { recursive: true }) }
 function key() { return process.env.WXFD_SECRET || '' }
@@ -68,4 +69,13 @@ async function getAnalysisCache(key) {
   const o = JSON.parse(fs.readFileSync(p, 'utf-8'))
   return o.data
 }
-module.exports = { saveRecord, listRecords, saveProfile, getProfile, saveAnalysisCache, getAnalysisCache }
+async function savePreferences(prefs) {
+  ensure()
+  fs.writeFileSync(prefFile, JSON.stringify({ data: prefs, ts: Date.now() }))
+}
+async function getPreferences() {
+  ensure()
+  if (!fs.existsSync(prefFile)) return null
+  return JSON.parse(fs.readFileSync(prefFile, 'utf-8')).data
+}
+module.exports = { saveRecord, listRecords, saveProfile, getProfile, saveAnalysisCache, getAnalysisCache, savePreferences, getPreferences }

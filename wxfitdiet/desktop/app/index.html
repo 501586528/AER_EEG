@@ -13,6 +13,7 @@
     <button data-tab="profile">个人信息</button>
     <button data-tab="diet">饮食记录</button>
     <button data-tab="analysis">分析</button>
+    <button data-tab="prefs">偏好</button>
     <button data-tab="recommend">推荐</button>
     <button data-tab="share">分享</button>
     <button data-tab="export">导出</button>
@@ -82,6 +83,16 @@
         <div class="bar"><span>蛋白质</span><div class="bar-inner" id="barProtein"></div></div>
         <div class="bar"><span>脂肪</span><div class="bar-inner" id="barFat"></div></div>
       </div>
+      <div class="analysis-grid">
+        <div>
+          <div class="title">关键评价</div>
+          <ul id="evaluation"></ul>
+        </div>
+        <div>
+          <div class="title">改进建议</div>
+          <ul id="recommendations"></ul>
+        </div>
+      </div>
     </div>
   </div>
   <div id="analysis" class="tab hidden">
@@ -94,6 +105,12 @@
     </div>
     <div class="section"><button id="btnGen" class="btn-primary">生成方案</button></div>
     <div class="section" id="plans"></div>
+  </div>
+  <div id="prefs" class="tab hidden">
+    <div class="section"><div class="title">偏好分析</div>
+      <button id="btnPrefAnalyze" class="btn-primary">即时分析</button>
+      <div id="prefBars"></div>
+    </div>
   </div>
   <div id="share" class="tab hidden">
     <div class="section"><div class="title">生成计划二维码</div><button id="btnQR" class="btn-primary">生成二维码</button><img id="qr"/></div>
