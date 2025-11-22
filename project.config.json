@@ -1,0 +1,30 @@
+{
+  "appid": "wx2849b179dd77d4b9",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "wxfitdiet/miniprogram/",
+  "libVersion": "3.11.3",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "setting": {
+    "coverView": true,
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "enhance": true,
+    "showShadowRootInWxmlPanel": true,
+    "packNpmRelationList": [],
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "condition": {},
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  },
+  "srcMiniprogramRoot": "wxfitdiet/miniprogram/"
+}
