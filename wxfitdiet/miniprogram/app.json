@@ -1,0 +1,26 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/profile/index",
+    "pages/diet/index",
+    "pages/analysis/index",
+    "pages/recommendations/index",
+    "pages/share/index",
+    "pages/export/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "健身饮食管理",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundTextStyle": "light",
+    "enablePullDownRefresh": false
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于根据地区调整预算"
+    }
+  },
+  "cloud": true
+}

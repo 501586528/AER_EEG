@@ -1,0 +1,16 @@
+<view class="container">
+  <view class="section">
+    <view class="title">推荐方案数量</view>
+    <picker mode="selector" range="{{counts}}" bindchange="onCountChange">
+      <view>{{countLabel}}</view>
+    </picker>
+  </view>
+  <view class="section">
+    <button class="btn-primary" bindtap="onGenerate">生成方案</button>
+  </view>
+  <view class="section">
+    <block wx:for="{{plans}}" wx:key="id">
+      <view>{{item.title}} 难度{{item.level}} 预估效果{{item.effect}}</view>
+    </block>
+  </view>
+</view>

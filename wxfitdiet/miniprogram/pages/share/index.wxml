@@ -1,0 +1,8 @@
+<view class="container">
+  <view class="section">
+    <view class="title">生成计划二维码</view>
+    <button class="btn-primary" bindtap="onGenerateQR">生成二维码</button>
+    <image src="{{qrUrl}}" mode="widthFix"/>
+  </view>
+  <button open-type="share">分享</button>
+</view>

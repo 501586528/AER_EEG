@@ -1,0 +1,46 @@
+<view class="container">
+  <form bindsubmit="onSubmit">
+    <view class="section">
+      <view class="title">基本信息</view>
+      <picker mode="selector" range="{{ageRange}}" bindchange="onAgeChange">
+        <view>年龄：{{age || '请选择'}}</view>
+      </picker>
+      <radio-group bindchange="onGenderChange">
+        <label><radio value="male" checked="{{gender==='male'}}"/>男</label>
+        <label><radio value="female" checked="{{gender==='female'}}"/>女</label>
+      </radio-group>
+      <input type="number" placeholder="身高(cm)" value="{{height}}" bindinput="onHeight"/>
+      <input type="number" placeholder="体重(kg)" value="{{weight}}" bindinput="onWeight"/>
+    </view>
+
+    <view class="section">
+      <view class="title">运动频率</view>
+      <picker mode="selector" range="{{freqOptions}}" bindchange="onFreqChange">
+        <view>{{freqLabel || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <view class="section">
+      <view class="title">健康目标</view>
+      <checkbox-group bindchange="onGoalsChange">
+        <label><checkbox value="fat_loss"/>减脂</label>
+        <label><checkbox value="muscle_gain"/>增肌</label>
+        <label><checkbox value="maintain"/>维持</label>
+        <label><checkbox value="special"/>特殊需求</label>
+      </checkbox-group>
+    </view>
+
+    <view class="section">
+      <view class="title">特殊人群附加信息</view>
+      <input placeholder="空腹血糖" value="{{fastingGlucose}}" bindinput="onFastingGlucose"/>
+      <input placeholder="餐后血糖" value="{{postprandialGlucose}}" bindinput="onPostprandialGlucose"/>
+      <input placeholder="收缩压" value="{{sbp}}" bindinput="onSbp"/>
+      <input placeholder="舒张压" value="{{dbp}}" bindinput="onDbp"/>
+      <picker mode="selector" range="{{growthStages}}" bindchange="onGrowthStageChange">
+        <view>{{growthStage || '请选择生长阶段'}}</view>
+      </picker>
+    </view>
+
+    <button class="btn-primary" formType="submit">保存并计算</button>
+  </form>
+</view>

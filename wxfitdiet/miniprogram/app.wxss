@@ -1,0 +1,21 @@
+page {
+  background-color: #f7f7f7;
+}
+.container {
+  padding: 16px;
+}
+.btn-primary {
+  background-color: #07c160;
+  color: #fff;
+}
+.section {
+  margin-bottom: 16px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+}
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}

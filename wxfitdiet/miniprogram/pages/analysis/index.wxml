@@ -1,0 +1,20 @@
+<view class="container">
+  <view class="section">
+    <view class="title">总热量</view>
+    <view>{{target.totalCalories}} 千卡</view>
+  </view>
+  <view class="section">
+    <view class="title">三大营养素占比</view>
+    <view>碳水：{{ratio.carb*100}}% 蛋白质：{{ratio.protein*100}}% 脂肪：{{ratio.fat*100}}%</view>
+  </view>
+  <view class="section">
+    <view class="title">微量元素</view>
+    <progress percent="{{microPercent}}" show-info="true"/>
+  </view>
+  <view class="section">
+    <view class="title">时间范围</view>
+    <picker mode="selector" range="{{ranges}}" bindchange="onRange">
+      <view>{{rangeLabel}}</view>
+    </picker>
+  </view>
+</view>

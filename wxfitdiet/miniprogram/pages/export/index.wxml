@@ -1,0 +1,7 @@
+<view class="container">
+  <view class="section">
+    <view class="title">导出营养报告</view>
+    <button bindtap="onExportExcel" class="btn-primary">导出Excel</button>
+    <button bindtap="onExportPDF" class="btn-primary">导出PDF</button>
+  </view>
+</view>

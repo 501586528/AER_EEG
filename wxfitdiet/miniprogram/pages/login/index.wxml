@@ -1,0 +1,6 @@
+<view class="container">
+  <view class="section">
+    <view class="title">微信授权登录</view>
+    <button class="btn-primary" bindtap="onLogin">授权登录</button>
+  </view>
+</view>

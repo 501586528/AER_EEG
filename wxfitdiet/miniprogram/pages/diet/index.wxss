@@ -1,0 +1,2 @@
+.section input { margin: 6px 0; background: #f0f0f0; border-radius: 6px; padding: 8px; }
+.section button { margin-top: 8px; }

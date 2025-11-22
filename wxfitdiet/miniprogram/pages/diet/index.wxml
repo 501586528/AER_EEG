@@ -1,0 +1,32 @@
+<view class="container">
+  <view class="section">
+    <view class="title">文字输入</view>
+    <input placeholder="搜索菜品" value="{{query}}" bindinput="onQuery"/>
+    <button bindtap="onSearch">搜索</button>
+    <view>
+      <block wx:for="{{results}}" wx:key="id">
+        <view>{{item.name}} {{item.calories}}千卡</view>
+      </block>
+    </view>
+  </view>
+  <view class="section">
+    <view class="title">图片识别</view>
+    <button bindtap="onPickImage">选择图片识别</button>
+    <view>{{imageResultText}}</view>
+  </view>
+  <view class="section">
+    <view class="title">预设菜品</view>
+    <button bindtap="onLoadPresets">加载常见菜品</button>
+    <view>
+      <block wx:for="{{presets}}" wx:key="id">
+        <view>{{item.name}} {{item.calories}}千卡</view>
+      </block>
+    </view>
+  </view>
+  <view class="section">
+    <view class="title">自定义菜品</view>
+    <input placeholder="菜品名称" value="{{customName}}" bindinput="onCustomName"/>
+    <input placeholder="热量(千卡)" value="{{customCalories}}" bindinput="onCustomCalories"/>
+    <button bindtap="onAddCustom">添加</button>
+  </view>
+</view>

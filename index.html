@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>格斗小游戏</title>
+<style>
+html, body { height: 100%; }
+body { margin: 0; display: flex; align-items: center; justify-content: center; background: #0e0f1a; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+#game { position: relative; width: 960px; height: 540px; }
+canvas { width: 960px; height: 540px; background: linear-gradient(#1c1f2b 0%, #10131c 70%), radial-gradient(50% 100% at 50% 100%, #18202e 0%, #0f121a 60%); border: 1px solid #1f2330; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.ui { position: absolute; top: 0; left: 0; width: 100%; padding: 10px; box-sizing: border-box; display: flex; gap: 12px; align-items: center; }
+.bar { flex: 1; height: 14px; background: #2b2f3f; border: 1px solid #3a3f55; border-radius: 6px; overflow: hidden; }
+.bar > .fill { height: 100%; transition: width 100ms linear; }
+.p1 { background: linear-gradient(90deg, #37d67a, #00c853); }
+.p2 { background: linear-gradient(90deg, #ff6d6d, #ff5252); }
+.round { color: #c7cbd6; font-size: 14px; min-width: 90px; text-align: center; }
+.overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: #e7eaf3; font-size: 26px; letter-spacing: 1px; background: rgba(0,0,0,0.35); }
+.overlay.show { display: flex; flex-direction: column; gap: 8px; }
+.hint { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; color: #9aa1b3; font-size: 13px; }
+.menu { gap: 12px; }
+.btn { padding: 10px 16px; border-radius: 6px; border: 1px solid #3a3f55; color: #e7eaf3; background: #1a1f2e; cursor: pointer; font-size: 14px; }
+.btn:hover { border-color: #5a6a8f; background: #21283a; }
+</style>
+</head>
+<body>
+<div id="game">
+  <div class="ui">
+    <div class="bar"><div id="hp1" class="fill p1" style="width:100%"></div></div>
+    <div class="round" id="round">Round 1</div>
+    <div class="bar"><div id="hp2" class="fill p2" style="width:100%"></div></div>
+  </div>
+  <canvas id="canvas" width="960" height="540"></canvas>
+  <div class="overlay" id="overlay"></div>
+  <div class="overlay show menu" id="menu">
+    <div>选择模式</div>
+    <div>
+      <button class="btn" id="btnPVE">PVE（玩家 vs AI）</button>
+      <button class="btn" id="btnPVP">PVP（玩家 vs 玩家）</button>
+    </div>
+    <div style="color:#9aa1b3;font-size:13px">选择后开始第一回合，R重开同模式</div>
+  </div>
+  <div class="hint">P1: A/D移动, W跳跃, F轻攻, G重攻 | P2: ←/→移动, ↑跳跃, K轻攻, L重攻 | R重开</div>
+</div>
+<script>
+const W = 960;
+const H = 540;
+const G = 1800;
+const FLOOR = H - 80;
+const DT = 1/60;
+const ctx = document.getElementById('canvas').getContext('2d');
+const hp1El = document.getElementById('hp1');
+const hp2El = document.getElementById('hp2');
+const overlayEl = document.getElementById('overlay');
+const roundEl = document.getElementById('round');
+const menuEl = document.getElementById('menu');
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+const effects = [];
+let shakeT = 0;
+let shakeMag = 0;
+let mode = null; // 'PVE' or 'PVP'
+
+class HitSpark {
+  constructor(x,y,color){ this.x=x; this.y=y; this.t=0; this.life=0.14; this.color=color; }
+  update(dt){ this.t += dt; }
+  draw(){ const a = 1 - this.t/this.life; if(a<=0) return; ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = this.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(this.x-8, this.y); ctx.lineTo(this.x+8, this.y); ctx.moveTo(this.x, this.y-8); ctx.lineTo(this.x, this.y+8); ctx.stroke(); ctx.restore(); }
+  get dead(){ return this.t>=this.life; }
+}
+
+class SwingArc {
+  constructor(x,y,dir,light){ this.x=x; this.y=y; this.dir=dir; this.light=light; this.t=0; this.life=0.18; }
+  update(dt){ this.t += dt; }
+  draw(){ const a = 1 - this.t/this.life; if(a<=0) return; ctx.save(); ctx.translate(this.x, this.y); ctx.scale(this.dir, 1); ctx.globalAlpha = 0.5*a; ctx.strokeStyle = this.light? '#37d67a' : '#ff6d6d'; ctx.lineWidth = this.light? 3 : 5; ctx.beginPath(); ctx.arc(0, 0, this.light? 54 : 74, -0.2, 1.2); ctx.stroke(); ctx.restore(); }
+  get dead(){ return this.t>=this.life; }
+}
+
+function spawnHitSpark(x,y,color){ effects.push(new HitSpark(x,y,color)); }
+function spawnSwing(x,y,dir,light){ effects.push(new SwingArc(x,y,dir,light)); }
+
+class Vec2 {
+  constructor(x=0, y=0) { this.x = x; this.y = y; }
+  add(v) { this.x += v.x; this.y += v.y; return this; }
+  scale(s) { this.x *= s; this.y *= s; return this; }
+  copy() { return new Vec2(this.x, this.y); }
+}
+
+class Box {
+  constructor(x, y, w, h) { this.x=x; this.y=y; this.w=w; this.h=h; }
+}
+
+function intersects(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+class Fighter {
+  constructor(id, x, color) {
+    this.id = id;
+    this.pos = new Vec2(x, FLOOR-120);
+    this.vel = new Vec2(0,0);
+    this.w = 80;
+    this.h = 120;
+    this.facing = id===1 ? 1 : -1;
+    this.color = color;
+    this.onGround = true;
+    this.state = 'idle';
+    this.health = 100;
+    this.attackTimer = 0;
+    this.attackTotal = 0;
+    this.hitStop = 0;
+    this.invul = 0;
+    this.comboWindow = 0;
+    this.swingDone = false;
+  }
+  hurtbox(){ return new Box(this.pos.x, this.pos.y, this.w, this.h); }
+  attackBox(light=false){
+    const reach = light ? 60 : 90;
+    const aw = light ? 45 : 55;
+    const ah = 40;
+    const x = this.pos.x + (this.facing>0? this.w : -aw) + (this.facing>0? reach-aw : -reach);
+    const y = this.pos.y + 30;
+    return new Box(x, y, aw, ah);
+  }
+  moveLeft(){ this.vel.x = -260; this.state = this.onGround? 'walk':'air'; this.facing = -1; }
+  moveRight(){ this.vel.x = 260; this.state = this.onGround? 'walk':'air'; this.facing = 1; }
+  stopX(){ this.vel.x = 0; if(this.onGround) this.state = 'idle'; }
+  jump(){ if(this.onGround){ this.vel.y = -620; this.onGround = false; this.state='jump'; } }
+  light(){ if(this.attackTimer<=0 && this.hitStop<=0){ this.attackTimer = 0.22; this.attackTotal = 0.22; this.state='attack_light'; this.swingDone = false; } }
+  heavy(){ if(this.attackTimer<=0 && this.hitStop<=0){ this.attackTimer = 0.34; this.attackTotal = 0.34; this.state='attack_heavy'; this.swingDone = false; } }
+  takeHit(p){ if(this.invul>0) return; this.health = clamp(this.health - p, 0, 100); this.hitStop = 0.1; this.invul = 0.25; this.state = 'hit'; this.vel.x = -120 * this.facing; }
+  update(dt){
+    if(this.hitStop>0){ this.hitStop -= dt; return; }
+    if(this.attackTimer>0){ this.attackTimer -= dt; } else if(this.state.startsWith('attack')) { this.state = this.onGround? 'idle':'air'; }
+    if(this.invul>0){ this.invul -= dt; }
+    this.vel.y += G*dt;
+    this.pos.add(this.vel.copy().scale(dt));
+    if(this.pos.y + this.h >= FLOOR){ this.pos.y = FLOOR - this.h; this.vel.y = 0; this.onGround = true; if(!this.state.startsWith('attack')) this.state = this.vel.x!==0? 'walk':'idle'; }
+    if(this.pos.x<0){ this.pos.x=0; }
+    if(this.pos.x+this.w>W){ this.pos.x=W-this.w; }
+  }
+  draw(){
+    const g = ctx.createLinearGradient(this.pos.x, this.pos.y, this.pos.x, this.pos.y+this.h);
+    g.addColorStop(0, this.color);
+    g.addColorStop(1, '#0b0d14');
+    const cx = this.pos.x + this.w/2;
+    const headX = cx, headY = this.pos.y + 22;
+    const tw = this.w*0.62;
+    const tx = cx - tw/2;
+    const ty = this.pos.y + 34;
+    const th = this.h*0.56;
+    let lean = 0;
+    if(this.state==='walk') lean = 6 * (this.facing);
+    if(this.state==='attack_light') lean = 8 * (this.facing);
+    if(this.state==='attack_heavy') lean = 12 * (this.facing);
+    ctx.fillStyle = g;
+    ctx.fillRect(tx + lean*0.2, ty, tw, th);
+    ctx.strokeStyle = this.invul>0? '#ffd54f' : '#2a3247';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tx + lean*0.2, ty, tw, th);
+    ctx.beginPath();
+    ctx.fillStyle = '#0f1320';
+    ctx.arc(headX + lean*0.25, headY, 18, 0, Math.PI*2);
+    ctx.fill();
+    const sX = this.facing>0? (this.pos.x + this.w - 24) : (this.pos.x + 24);
+    const sY = this.pos.y + 56;
+    const bX = this.facing>0? (this.pos.x + 24) : (this.pos.x + this.w - 24);
+    const bY = sY;
+    ctx.strokeStyle = '#2a3247';
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(bX, bY); ctx.lineTo(bX - 18*this.facing, bY + 6); ctx.stroke();
+    let ext = 22;
+    let thk = 7;
+    let handGlow = null;
+    let phase = 0;
+    if(this.state.startsWith('attack') && this.attackTotal>0){ phase = 1 - this.attackTimer/this.attackTotal; }
+    const isLight = this.state==='attack_light';
+    if(this.state.startsWith('attack')){
+      if(phase<0.3){ ext = 28; }
+      else if(phase<0.7){ ext = isLight? 64 : 92; thk = isLight? 9 : 11; handGlow = isLight? '#37d67a':'#ff6d6d'; if(!this.swingDone){ spawnSwing(sX, sY, this.facing, isLight); this.swingDone = true; } }
+      else { ext = isLight? 48 : 70; }
+    }
+    ctx.strokeStyle = '#2a3247';
+    ctx.lineWidth = thk;
+    ctx.beginPath(); ctx.moveTo(sX, sY); ctx.lineTo(sX + this.facing*ext, sY - 6); ctx.stroke();
+    if(handGlow){ ctx.save(); ctx.globalAlpha = 0.8; ctx.fillStyle = handGlow; ctx.beginPath(); ctx.arc(sX + this.facing*ext, sY - 6, isLight? 5:7, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle = '#161a28';
+    const lw = 18, lh = 32;
+    const lx = this.facing>0? (this.pos.x + 14) : (this.pos.x + this.w - lw - 14);
+    const ly = this.pos.y + this.h - lh;
+    const rx = this.facing>0? (this.pos.x + this.w - lw - 14) : (this.pos.x + 14);
+    const ry = ly;
+    ctx.fillRect(lx, ly, lw, lh);
+    ctx.fillRect(rx, ry, lw, lh);
+    if(this.state.startsWith('attack')){
+      const light = isLight;
+      const a = this.attackBox(light);
+      ctx.fillStyle = light? 'rgba(55,214,122,0.18)' : 'rgba(255,98,98,0.18)';
+      ctx.fillRect(a.x, a.y, a.w, a.h);
+      ctx.strokeStyle = light? '#37d67a' : '#ff6d6d';
+      ctx.strokeRect(a.x, a.y, a.w, a.h);
+    }
+  }
+}
+
+const p1 = new Fighter(1, 140, '#2fdc8b');
+const p2 = new Fighter(2, W-220, '#ff7b7b');
+
+const keys = new Map();
+document.addEventListener('keydown', e=>{ keys.set(e.code, true); });
+document.addEventListener('keyup', e=>{ keys.set(e.code, false); });
+
+function startGame(m){
+  mode = m;
+  round = 1;
+  menuEl.classList.remove('show');
+  overlayEl.classList.remove('show');
+  restart();
+}
+
+document.getElementById('btnPVE').addEventListener('click', ()=> startGame('PVE'));
+document.getElementById('btnPVP').addEventListener('click', ()=> startGame('PVP'));
+
+let gameOver = false;
+let round = 1;
+
+function ai(dt){
+  const dx = (p1.pos.x + p1.w/2) - (p2.pos.x + p2.w/2);
+  p2.facing = dx>0? 1 : -1;
+  const dist = Math.abs(dx);
+  const close = dist < 160;
+  if(p2.attackTimer<=0 && p2.hitStop<=0){
+    if(close){
+      if(Math.random()<0.5) p2.light(); else p2.heavy();
+    } else {
+      if(dx>0) p2.moveRight(); else p2.moveLeft();
+    }
+    if(Math.random()<0.02) p2.jump();
+  }
+  if(!close && Math.abs(p2.vel.x)>0 && Math.random()<0.01) p2.stopX();
+}
+
+function handleInput(){
+  if(mode===null) return; // menu shown, ignore input except R handled in update()
+  p1.facing = (p1.pos.x + p1.w/2) < (p2.pos.x + p2.w/2) ? 1 : -1;
+  p2.facing = (p2.pos.x + p2.w/2) < (p1.pos.x + p1.w/2) ? 1 : -1;
+  if(keys.get('KeyA')) p1.moveLeft(); else if(keys.get('KeyD')) p1.moveRight(); else p1.stopX();
+  if(keys.get('KeyW')) p1.jump();
+  if(keys.get('KeyF')) p1.light();
+  if(keys.get('KeyG')) p1.heavy();
+  if(mode==='PVP'){
+    if(keys.get('ArrowLeft')) p2.moveLeft(); else if(keys.get('ArrowRight')) p2.moveRight(); else p2.stopX();
+    if(keys.get('ArrowUp')) p2.jump();
+    if(keys.get('KeyK')) p2.light();
+    if(keys.get('KeyL')) p2.heavy();
+  } else { p2.stopX(); }
+}
+
+function resolveHit(a, b){
+  const light = a.state==='attack_light';
+  const dmg = light? 6 : 12;
+  const wind = light? 0.14 : 0.22;
+  const box = a.attackBox(light);
+  const hb = b.hurtbox();
+  if(intersects(box, hb)){
+    b.takeHit(dmg);
+    a.comboWindow = wind;
+    const ix = Math.max(box.x, hb.x);
+    const iy = Math.max(box.y, hb.y);
+    const iw = Math.min(box.x+box.w, hb.x+hb.w) - ix;
+    const ih = Math.min(box.y+box.h, hb.y+hb.h) - iy;
+    const cx = ix + iw/2;
+    const cy = iy + ih/2;
+    spawnHitSpark(cx, cy, light? '#37d67a' : '#ff6d6d');
+    shakeT = light? 0.08 : 0.12;
+    shakeMag = light? 3 : 6;
+  }
+}
+
+function update(dt){
+  if(keys.get('KeyR') && mode!==null) restart();
+  if(mode===null) return; // waiting for mode selection
+  if(gameOver) return;
+  handleInput();
+  if(mode==='PVE') ai(dt);
+  p1.update(dt);
+  p2.update(dt);
+  if(p1.state.startsWith('attack')) resolveHit(p1, p2);
+  if(p2.state.startsWith('attack')) resolveHit(p2, p1);
+  for(let i=0;i<effects.length;i++){ effects[i].update(dt); }
+  for(let i=effects.length-1;i>=0;i--){ if(effects[i].dead) effects.splice(i,1); }
+  if(shakeT>0){ shakeT -= dt; if(shakeT<0) shakeT=0; }
+  hp1El.style.width = p1.health + '%';
+  hp2El.style.width = p2.health + '%';
+  if(p1.health<=0 || p2.health<=0){
+    gameOver = true;
+    const winner = p1.health>p2.health? 'P1胜利' : 'P2胜利';
+    overlayEl.classList.add('show');
+    overlayEl.innerHTML = winner + '<br/>按 R 重新开始';
+  }
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  const sx = shakeT>0? (Math.random()*2-1)*shakeMag : 0;
+  const sy = shakeT>0? (Math.random()*2-1)*shakeMag : 0;
+  ctx.translate(sx, sy);
+  ctx.fillStyle = '#121520';
+  ctx.fillRect(0, FLOOR+60, W, H-(FLOOR+60));
+  ctx.fillStyle = '#1b2233';
+  ctx.fillRect(0, FLOOR, W, 60);
+  ctx.strokeStyle = '#2a3247';
+  ctx.beginPath();
+  ctx.moveTo(0, FLOOR);
+  ctx.lineTo(W, FLOOR);
+  ctx.stroke();
+  if(mode===null){ ctx.restore(); return; }
+  p1.draw();
+  p2.draw();
+  for(let i=0;i<effects.length;i++){ effects[i].draw(); }
+  ctx.restore();
+}
+
+function restart(){
+  p1.pos = new Vec2(140, FLOOR-120); p1.vel = new Vec2(0,0); p1.health = 100; p1.state='idle'; p1.onGround=true; p1.attackTimer=0; p1.invul=0; p1.hitStop=0; p1.facing=1;
+  p2.pos = new Vec2(W-220, FLOOR-120); p2.vel = new Vec2(0,0); p2.health = 100; p2.state='idle'; p2.onGround=true; p2.attackTimer=0; p2.invul=0; p2.hitStop=0; p2.facing=-1;
+  overlayEl.classList.remove('show');
+  overlayEl.textContent = '';
+  gameOver = false;
+  round += 1;
+  roundEl.textContent = 'Round ' + round;
+}
+
+let acc = 0, last = performance.now();
+function loop(t){
+  const dt = (t - last)/1000; last = t; acc += dt; if(acc>0.25) acc=0.25;
+  while(acc>=DT){ update(DT); acc-=DT; }
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
