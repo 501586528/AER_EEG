@@ -1,6 +1,7 @@
 import { calculateTarget } from './utils/nutrition.js'
 import { validateProfile, mapGoalToArray } from './utils/validators.js'
 import { asyncSet, asyncGet, pushDoc, startCleanup, addDietRecord, getDietRecords, updateDietRecord } from './utils/storage.js'
+import { buildAnalysisPrompt } from './utils/prompt.js'
 const tabs = document.querySelectorAll('.nav button')
 const sections = document.querySelectorAll('.tab')
 tabs.forEach(b => b.addEventListener('click', () => {
@@ -144,6 +145,26 @@ document.getElementById('btnSaveDiet').addEventListener('click', async () => {
   renderDietList()
 })
 renderDietList()
+async function runAnalysis() {
+  const records = await getDietRecords()
+  const prompt = buildAnalysisPrompt(records)
+  try {
+    const r = await fetch('http://localhost:8787/analysis/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })
+    const data = await r.json()
+    const res = data.result || {}
+    document.getElementById('analysisText').textContent = res.summary || ''
+    const carb = parseInt((res.nutrients && res.nutrients.carbohydrate || '0').toString().replace('%',''))
+    const protein = parseInt((res.nutrients && res.nutrients.protein || '0').toString().replace('%',''))
+    const fat = parseInt((res.nutrients && res.nutrients.fat || '0').toString().replace('%',''))
+    document.getElementById('barCarb').style.width = `${carb}%`
+    document.getElementById('barProtein').style.width = `${protein}%`
+    document.getElementById('barFat').style.width = `${fat}%`
+  } catch (e) {
+    document.getElementById('analysisText').textContent = '分析失败'
+  }
+}
+document.getElementById('btnAnalyze').addEventListener('click', runAnalysis)
+document.getElementById('btnExportAnalysis').addEventListener('click', async () => { await window.api.exportAnalysisPdf() })
 async function loadAnalysis() {
   const t = await window.api.storageGet('nutrition_target')
   document.getElementById('total').textContent = `${(t && t.totalCalories) || 0} 千卡`

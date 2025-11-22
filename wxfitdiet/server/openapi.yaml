@@ -1,0 +1,107 @@
+openapi: 3.0.3
+info:
+  title: WxFitDiet LLM API
+  version: 0.1.0
+servers:
+  - url: https://api.deepseek.com/v1
+paths:
+  /config/get:
+    get:
+      responses:
+        '200': { description: OK }
+  /config/set:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                apiUrl:
+                  type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid }
+  /diet/parse:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+      responses:
+        '200': { description: OK }
+  /diet/query:
+    get:
+      parameters:
+        - in: query
+          name: name
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /diet/record:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                record:
+                  type: object
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid }
+  /diet/list:
+    get:
+      responses:
+        '200': { description: OK }
+  /profile/set:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profile:
+                  type: object
+      responses:
+        '200': { description: OK }
+  /profile/get:
+    get:
+      responses:
+        '200': { description: OK }
+  /analysis/run:
+    post:
+      responses:
+        '200': { description: OK }
+  /analysis/cache:
+    get:
+      parameters:
+        - in: query
+          name: key
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: Not Found }
+  /recommend/generate:
+    post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                analysisKey:
+                  type: string
+      responses:
+        '200': { description: OK }

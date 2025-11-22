@@ -68,10 +68,20 @@
     </div>
     <div class="bottom-bar">
       <button id="btnSaveDiet" class="btn-primary">保存记录</button>
+      <button id="btnAnalyze" class="btn-secondary" style="margin-left:8px">智能分析</button>
+      <button id="btnExportAnalysis" class="btn-secondary" style="margin-left:8px">导出分析PDF</button>
     </div>
     <div id="toast" class="toast">记录已保存</div>
     <div class="section"><div class="title"><span class="icon">🗂️</span>历史记录</div>
       <div id="dietList"></div>
+    </div>
+    <div class="section"><div class="title"><span class="icon">📊</span>智能分析结果</div>
+      <div id="analysisText"></div>
+      <div class="bars">
+        <div class="bar"><span>碳水</span><div class="bar-inner" id="barCarb"></div></div>
+        <div class="bar"><span>蛋白质</span><div class="bar-inner" id="barProtein"></div></div>
+        <div class="bar"><span>脂肪</span><div class="bar-inner" id="barFat"></div></div>
+      </div>
     </div>
   </div>
   <div id="analysis" class="tab hidden">

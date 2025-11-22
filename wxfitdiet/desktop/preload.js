@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('api', {
   storageGet: (key) => ipcRenderer.invoke('storage:get', key),
   storageSet: (key, value) => ipcRenderer.invoke('storage:set', key, value),
   fileStore: (path) => ipcRenderer.invoke('file:store', { path })
+  ,exportAnalysisPdf: () => ipcRenderer.invoke('pdf:export')
 })

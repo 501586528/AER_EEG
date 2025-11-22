@@ -63,6 +63,15 @@ ipcMain.handle('export', async (e, args) => {
   shell.showItemInFolder(file)
   return { url: file }
 })
+ipcMain.handle('pdf:export', async () => {
+  const w = BrowserWindow.getFocusedWindow() || win
+  if (!w) return { error: 'no_window' }
+  const pdf = await w.webContents.printToPDF({ pageSize: 'A4' })
+  const file = path.join(app.getPath('downloads'), `analysis_${Date.now()}.pdf`)
+  fs.writeFileSync(file, pdf)
+  shell.showItemInFolder(file)
+  return { url: file }
+})
 ipcMain.handle('file:store', async (e, args) => {
   const src = args && args.path
   if (!src) return { error: 'no_path' }

@@ -1,0 +1,12 @@
+# API配置区块
+# base_url: 模型服务基础地址
+# api_key: 认证密钥，支持 ${API_KEY} 环境变量占位
+# timeout_ms: 请求超时时间（毫秒），默认30000
+# max_retries: 最大重试次数，默认3
+# log_level: 日志级别，可选 [debug, info, warn, error]
+
+base_url: "https://api.deepseek.com/v1"
+api_key: "${API_KEY}"
+timeout_ms: 30000
+max_retries: 3
+log_level: info

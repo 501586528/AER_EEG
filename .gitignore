@@ -9,3 +9,7 @@
 /wxfitdiet/desktop/dist/
 /wxfitdiet/miniprogram/dist/
 **/*.log
+/wxfitdiet/server/data/config.json
+/wxfitdiet/server/data/config.yaml
+/wxfitdiet/server/.env
+/wxfitdiet/server/data/backups/
